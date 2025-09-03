@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Environment, Stage } from "@react-three/drei";
+import { OrbitControls, Environment } from "@react-three/drei";
 import Ring from "./components/Ring";
 
 export default function App() {
@@ -12,7 +12,7 @@ export default function App() {
         <directionalLight position={[5, 5, 5]} intensity={1.2} />
         <Environment preset="city" />
         <Ring />
-        <OrbitControls />
+        <OrbitControls maxDistance={200} minDistance={50}/>
       </Canvas>
     </div>   
   );         
