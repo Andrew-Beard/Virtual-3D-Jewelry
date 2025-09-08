@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useHandStore } from "@/store/hands";
 import { FilesetResolver, HandLandmarker, type HandLandmarkerResult } from "@mediapipe/tasks-vision";
+import HandOverlay from "@/components/ui/HandOverlay";
 
 
 
@@ -8,6 +9,7 @@ export default function HandTracker() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [ready, setReady] = useState(false);
+    const landmarks = useHandStore((state) => state.landmarks);
     const setLandmarks = useHandStore((state) => state.setLandmarks);
     const setVideoEl = useHandStore((state) => state.setVideoEl);
     const landmarkerRef = useRef<HandLandmarker | null>(null);
@@ -159,6 +161,10 @@ export default function HandTracker() {
             <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: ready ? "block" : "none" }}/>
             {/* Keep video mounted for Safari autoplay policy */}
             <video ref={videoRef} playsInline muted style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />
+            {/* Display guidance overlay if no hand detected (after camera ready) */}
+            {ready && !landmarks && (
+               <HandOverlay/>
+            )}
         </div>
     )
 }
