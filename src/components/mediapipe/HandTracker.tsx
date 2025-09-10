@@ -9,13 +9,14 @@ export default function HandTracker() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [ready, setReady] = useState(false);
+    const [camError, setCamError] = useState<string | null>(null);
     const landmarks = useHandStore((state) => state.landmarks);
     const setLandmarks = useHandStore((state) => state.setLandmarks);
     const setVideoEl = useHandStore((state) => state.setVideoEl);
     const landmarkerRef = useRef<HandLandmarker | null>(null);
     const animationRef = useRef<number | null>(null);
-    // const fpsTimes = useRef<number[]>([]); // For FPS calculation
-    // const lastLogRef = useRef<number>(0);
+    const fpsTimes = useRef<number[]>([]); // For FPS calculation
+    const lastLogRef = useRef<number>(0);
 
     useEffect(() => {
         let stream: MediaStream | null = null;
@@ -39,6 +40,10 @@ export default function HandTracker() {
                 landmarkerRef.current = landmarker;
 
                 // Access webcam with user-facing camera preference
+                if(!navigator.mediaDevices?.getUserMedia){
+                    setCamError("unavailable");
+                    return;
+                }
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: { facingMode: "user" },
@@ -48,12 +53,11 @@ export default function HandTracker() {
                     if (cancelled) return;
                     const e = err as DOMException & { name?: string; message?: string };
                     if (e?.name === "NotFoundError" || e?.name === "OverconstrainedError" || e?.name === "NotReadableError") {
-                        // logging only for now
-                        alert("No camera device found or it is not accessible.");
+                        setCamError("not-found");
                     } else if (e?.name === "NotAllowedError" || e?.name === "SecurityError") {
-                        alert("Camera access was denied. Please allow permission.");
+                        setCamError("denied");
                     } else {
-                        alert(`Unable to access camera: ${e?.message ?? String(e)}`);
+                        setCamError("other");
                     }
                     return;
                 }
@@ -100,7 +104,7 @@ export default function HandTracker() {
                             if(res?.landmarks?.length){
                                 res.landmarks.forEach((hand, i) => {
                                     const handed = res.handedness?.[i]?.[0]?.categoryName || "unknown";
-                                    const color = handed === "Left" ? "red" : handed === "Right" ? "blue" : "white";
+                                    const color = handed === "Left" ? "green" : handed === "Right" ? "purple" : "white";
                                     ctx.fillStyle = color;
                                     hand.forEach((p) => {
                                         const x = (1 - p.x) * w; // flip x because of mirrored
@@ -114,7 +118,7 @@ export default function HandTracker() {
 
                             //Custom FPS calculation and logging for accuracy
 
-                            // const fps = computeAndLogFps(nowMs, fpsTimes.current, lastLogRef);
+                            computeAndLogFps(nowMs, fpsTimes.current, lastLogRef);
                             // ctx.fillStyle = "white";
                             // ctx.font = "20px Arial";
                             // ctx.fillText(`FPS: ${fps.toFixed(1)}`, 10, 30);
@@ -136,6 +140,7 @@ export default function HandTracker() {
 
             } catch (e) {
                 console.error("Error initializing HandTracker:", e);
+                setCamError("init-failed");
             }
         }
         init();
@@ -156,6 +161,24 @@ export default function HandTracker() {
         }
     }, [setLandmarks, setVideoEl]);
 
+    // Fallback UI if camera not accessible
+    if (camError) {
+        const msg = camError === "denied" ? "Camera permission denied" :
+                    camError === "not-found" ? "No camera found" :
+                    camError === "unavailable" ? "Camera API unavailable" :
+                    camError === "init-failed" ? "Initialization failed" : "Camera error";
+        return (
+            <div style={{ position: "absolute", inset: 0, zIndex: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', color: '#ddd', textAlign: 'center', gap: '1rem', padding: '1rem' }}>
+                <img src="/camera-error.png" alt="Camera error" style={{ maxWidth: '200px', opacity: 0.85 }} />
+                <div style={{ fontSize: '0.95rem', lineHeight: 1.4 }}>
+                    <strong>{msg}</strong><br/>
+                    {camError === 'denied' && 'Allow camera access in your browser settings and reload.'}
+                    {camError === 'not-found' && 'Connect a camera device and reload.'}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
             <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: ready ? "block" : "none" }}/>
@@ -171,20 +194,20 @@ export default function HandTracker() {
 
 // Custom FPS calculation and logging
 
-// function computeAndLogFps(nowMs: number, buffer: number[], lastLog: { current: number }) {
-//     buffer.push(nowMs);
-//     const windowMs = 2000;
-//     const cutoff = nowMs - windowMs;
-//     while (buffer.length && buffer[0] < cutoff) buffer.shift();
-//     let fps = 0;
-//     if (buffer.length > 1) {
-//         const duration = buffer[buffer.length - 1] - buffer[0];
-//         fps = (buffer.length - 1) / (duration / 1000);
-//     }
-//     if (!lastLog.current || nowMs - lastLog.current > 2000) {
-//         lastLog.current = nowMs;
-//         // Average FPS over this window
-//         console.log(`[HandTracker] avg FPS: ${fps.toFixed(1)}`);
-//     }
-//     return fps;
-// }
+function computeAndLogFps(nowMs: number, buffer: number[], lastLog: { current: number }) {
+    buffer.push(nowMs);
+    const windowMs = 2000;
+    const cutoff = nowMs - windowMs;
+    while (buffer.length && buffer[0] < cutoff) buffer.shift();
+    let fps = 0;
+    if (buffer.length > 1) {
+        const duration = buffer[buffer.length - 1] - buffer[0];
+        fps = (buffer.length - 1) / (duration / 1000);
+    }
+    if (!lastLog.current || nowMs - lastLog.current > 2000) {
+        lastLog.current = nowMs;
+        // Average FPS over this window
+        console.log(`[HandTracker] avg FPS: ${fps.toFixed(1)}`);
+    }
+    return fps;
+}
